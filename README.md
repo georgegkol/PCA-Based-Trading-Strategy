@@ -51,7 +51,9 @@ python Monthly_re.py
 ## Project Structure
 
 ```
-├── live_runner.py               # Downloads data, runs strategy, executes trades
+├── scheduler_check.py           # Runs daily via Task Scheduler, triggers rebalance after 20 NYSE trading days
+├── live_runner.py               # Downloads data, runs PCA strategy, emails proposed trades
+├── approve_trades.py            # Run manually to execute approved trades via IBKR
 ├── ibkr_executor.py             # Interactive Brokers order execution
 ├── Monthly_re.py                # Backtesting and performance analysis
 ├── Download_US_prices.py        # Manual data download script

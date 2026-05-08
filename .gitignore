@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 datasets/
 old files/
+pending_trades.json
+last_rebalance.txt

@@ -2,6 +2,7 @@ import json
 import os
 import smtplib
 import csv
+import requests
 import pandas as pd
 import pandas_market_calendars as mcal
 from datetime import datetime
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 GMAIL_EMAIL = os.getenv("GMAIL_EMAIL")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") or os.getenv("GMAIL_PASSWORD")
+EODHD_API_KEY = os.getenv("API_KEY")
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(PROJECT_DIR, 'portfolio_state.json')
@@ -59,6 +61,34 @@ def sp500_return_for_period(start_date, end_date):
     return (df.iloc[-1]['adjusted_close'] - df.iloc[0]['adjusted_close']) / df.iloc[0]['adjusted_close']
 
 
+def fetch_live_prices(tickers):
+    today = datetime.today().strftime('%Y-%m-%d')
+    prices = {}
+    for ticker in tickers:
+        url = (f"https://eodhd.com/api/eod/{ticker}.US"
+               f"?from={today}&to={today}&period=d&api_token={EODHD_API_KEY}&fmt=json")
+        resp = requests.get(url)
+        if resp.status_code == 200 and resp.json():
+            prices[ticker] = resp.json()[-1]['adjusted_close']
+    return prices
+
+
+def holding_return_since_rebalance(tickers, last_rebalance_str):
+    start = last_rebalance_str
+    today = datetime.today().strftime('%Y-%m-%d')
+    returns = {}
+    for ticker in tickers:
+        url = (f"https://eodhd.com/api/eod/{ticker}.US"
+               f"?from={start}&to={today}&period=d&api_token={EODHD_API_KEY}&fmt=json")
+        resp = requests.get(url)
+        if resp.status_code == 200 and len(resp.json()) >= 2:
+            data = resp.json()
+            start_price = data[0]['adjusted_close']
+            end_price = data[-1]['adjusted_close']
+            returns[ticker] = (end_price - start_price) / start_price
+    return returns
+
+
 def next_rebalance_date(last_rebalance_str, trading_days=20):
     nyse = mcal.get_calendar('NYSE')
     last = pd.Timestamp(last_rebalance_str)
@@ -75,14 +105,13 @@ def next_rebalance_date(last_rebalance_str, trading_days=20):
     return "Soon"
 
 
-def build_email(investor, state):
+def build_email(investor, state, live_returns):
     all_returns = state['portfolio_returns']
     last_rebalance = state['last_rebalance']
     start_date = investor['start_date']
     initial = investor['initial_investment']
     name = investor['name'] or 'Investor'
 
-    # Filter returns to only those on or after the investor's start date
     investor_returns = [
         r for r in all_returns
         if r['portfolio_return'] != 0 and r['date'] >= start_date
@@ -100,8 +129,11 @@ def build_email(investor, state):
     next_reb = next_rebalance_date(last_rebalance)
 
     holdings_rows = ''.join(
-        f"<tr><td style='padding:8px 14px;border-bottom:1px solid #2a2a2a'>{h['ticker']}</td>"
-        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{h['weight']*100:.1f}%</td></tr>"
+        f"<tr>"
+        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a'>{h['ticker']}</td>"
+        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{h['weight']*100:.1f}%</td>"
+        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{fmt_pct_plain(live_returns.get(h['ticker']))}</td>"
+        f"</tr>"
         for h in state['current_holdings']
     )
 
@@ -111,6 +143,13 @@ def build_email(investor, state):
         color = '#4ade80' if val >= 0 else '#f87171'
         sign = '+' if val >= 0 else ''
         return f"<span style='color:{color};font-weight:700'>{sign}{val*100:.2f}%</span>"
+
+    def fmt_pct_plain(val):
+        if val is None:
+            return '<span style="color:#6b7280">—</span>'
+        color = '#4ade80' if val >= 0 else '#f87171'
+        sign = '+' if val >= 0 else ''
+        return f"<span style='color:{color}'>{sign}{val*100:.2f}%</span>"
 
     def fmt_money(val):
         return f"${val:,.2f}"
@@ -170,6 +209,7 @@ def build_email(investor, state):
           <tr style="border-bottom:1px solid #2a2a2a">
             <th style="padding:10px 14px;text-align:left;font-size:12px;color:#6b7280;font-weight:500">Ticker</th>
             <th style="padding:10px 14px;text-align:right;font-size:12px;color:#6b7280;font-weight:500">Weight</th>
+            <th style="padding:10px 14px;text-align:right;font-size:12px;color:#6b7280;font-weight:500">Since rebalance</th>
           </tr>
         </thead>
         <tbody>{holdings_rows}</tbody>
@@ -228,9 +268,13 @@ def main():
         print("No investors found in investors.csv.")
         return
 
+    tickers = [h['ticker'] for h in state['current_holdings']]
+    live_returns = holding_return_since_rebalance(tickers, state['last_rebalance'])
+    print(f"Live returns fetched: {live_returns}")
+
     print(f"Sending updates to {len(investors)} investor(s)...")
     for investor in investors:
-        html = build_email(investor, state)
+        html = build_email(investor, state, live_returns)
         send_email(investor, html)
         print(f"  Sent to {investor['name']} <{investor['email']}>")
 

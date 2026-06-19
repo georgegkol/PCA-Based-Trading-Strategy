@@ -2,6 +2,7 @@ import json
 import os
 import smtplib
 import csv
+import hashlib
 import requests
 import pandas as pd
 import pandas_market_calendars as mcal
@@ -128,15 +129,6 @@ def build_email(investor, state, live_returns):
 
     next_reb = next_rebalance_date(last_rebalance)
 
-    holdings_rows = ''.join(
-        f"<tr>"
-        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a'>{h['ticker']}</td>"
-        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{h['weight']*100:.1f}%</td>"
-        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{fmt_pct_plain(live_returns.get(h['ticker']))}</td>"
-        f"</tr>"
-        for h in state['current_holdings']
-    )
-
     def fmt_pct(val):
         if val is None:
             return '<span style="color:#6b7280">N/A</span>'
@@ -154,7 +146,15 @@ def build_email(investor, state, live_returns):
     def fmt_money(val):
         return f"${val:,.2f}"
 
-    import hashlib
+    holdings_rows = ''.join(
+        f"<tr>"
+        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a'>{h['ticker']}</td>"
+        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{h['weight']*100:.1f}%</td>"
+        f"<td style='padding:8px 14px;border-bottom:1px solid #2a2a2a;text-align:right'>{fmt_pct_plain(live_returns.get(h['ticker']))}</td>"
+        f"</tr>"
+        for h in state['current_holdings']
+    )
+
     compliments = [
         "You have exceptional taste. In investments and, we can only assume, in life.",
         "Objectively one of the best-looking investors we've ever had. We don't make the rules.",

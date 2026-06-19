@@ -17,6 +17,8 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(PROJECT_DIR, 'portfolio_state.json')
 INVESTORS_FILE = os.path.join(PROJECT_DIR, 'investors.csv')
 SP500_FILE = os.path.join(PROJECT_DIR, 'datasets', 'sp500_total_return.csv')
+LAST_EMAIL_FILE = os.path.join(PROJECT_DIR, 'last_investor_email.txt')
+EMAIL_INTERVAL_DAYS = 3
 
 
 def load_state():
@@ -201,7 +203,24 @@ def send_email(investor, html_body):
         server.send_message(msg)
 
 
+def should_send_today():
+    if not os.path.exists(LAST_EMAIL_FILE):
+        return True
+    with open(LAST_EMAIL_FILE) as f:
+        last_sent = datetime.strptime(f.read().strip(), '%Y-%m-%d').date()
+    return (datetime.today().date() - last_sent).days >= EMAIL_INTERVAL_DAYS
+
+
+def mark_sent():
+    with open(LAST_EMAIL_FILE, 'w') as f:
+        f.write(datetime.today().strftime('%Y-%m-%d'))
+
+
 def main():
+    if not should_send_today():
+        print("Less than 3 days since last email. Skipping.")
+        return
+
     state = load_state()
     investors = load_investors()
 
@@ -214,6 +233,8 @@ def main():
         html = build_email(investor, state)
         send_email(investor, html)
         print(f"  Sent to {investor['name']} <{investor['email']}>")
+
+    mark_sent()
     print("Done.")
 
 

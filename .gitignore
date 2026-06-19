@@ -5,3 +5,5 @@ datasets/
 old files/
 pending_trades.json
 last_rebalance.txt
+portfolio_state.json
+investors.csv

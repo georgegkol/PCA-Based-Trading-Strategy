@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import pandas_market_calendars as mcal
 import pandas as pd
@@ -7,7 +8,7 @@ from datetime import datetime
 LAST_REBALANCE_FILE = 'last_rebalance.txt'
 TRADING_DAYS_THRESHOLD = 20
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-PYTHON = os.path.join(os.path.dirname(os.__file__), '..', 'python.exe')  # Anaconda python
+PYTHON = sys.executable
 
 # ─── Read last rebalance date ────────────────────────────────────────────────
 if not os.path.exists(LAST_REBALANCE_FILE):

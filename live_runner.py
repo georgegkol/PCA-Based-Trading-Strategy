@@ -16,7 +16,7 @@ from functions.Residuals_PCA_function import regime_scaling, vol_scaling, calcul
 
 load_dotenv()
 GMAIL_EMAIL = os.getenv("GMAIL_EMAIL")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") or os.getenv("GMAIL_PASSWORD")
 
 def send_trade_email(sells, buys, holds, rebalance_date):
     subject = f"Rebalance Alert - {rebalance_date}"
@@ -165,3 +165,16 @@ else:
 # ─── Save last rebalance date for scheduler ──────────────────────────────────
 with open('last_rebalance.txt', 'w') as f:
     f.write(rebalance_date_str)
+
+# ─── Save portfolio state for investor updates ───────────────────────────────
+state = {
+    'last_rebalance': rebalance_date_str,
+    'current_holdings': previous_longs_df[['ticker', 'weight']].to_dict(orient='records'),
+    'portfolio_returns': [
+        {k: (v.strftime('%Y-%m-%d') if hasattr(v, 'strftime') else v) for k, v in r.items()}
+        for r in portfolio_returns
+    ],
+}
+with open('portfolio_state.json', 'w') as f:
+    json.dump(state, f, indent=2)
+print("Portfolio state saved to portfolio_state.json.")

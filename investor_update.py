@@ -62,18 +62,6 @@ def sp500_return_for_period(start_date, end_date):
     return (df.iloc[-1]['adjusted_close'] - df.iloc[0]['adjusted_close']) / df.iloc[0]['adjusted_close']
 
 
-def fetch_live_prices(tickers):
-    today = datetime.today().strftime('%Y-%m-%d')
-    prices = {}
-    for ticker in tickers:
-        url = (f"https://eodhd.com/api/eod/{ticker}.US"
-               f"?from={today}&to={today}&period=d&api_token={EODHD_API_KEY}&fmt=json")
-        resp = requests.get(url)
-        if resp.status_code == 200 and resp.json():
-            prices[ticker] = resp.json()[-1]['adjusted_close']
-    return prices
-
-
 def holding_return_since_rebalance(tickers, last_rebalance_str):
     start = last_rebalance_str
     today = datetime.today().strftime('%Y-%m-%d')

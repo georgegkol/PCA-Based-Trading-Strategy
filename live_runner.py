@@ -8,7 +8,7 @@ from email.mime.text import MIMEText
 from datetime import datetime
 from dotenv import load_dotenv
 import os
-from functions.Data_download import get_dataset_split, filter_volume_lowprices_availtickers, eodhd_download_prices, download_sp500_total_return
+from functions.Data_download import get_dataset_split, filter_volume_lowprices_availtickers
 from functions.Tech_Indicators import rsi, macd, rolling_beta, ulcer_index, atr
 from functions.Residuals_PCA_function import get_residuals, composite_alpha, generate_long_only_signals, filter_fundamentals, build_daily_net_portfolio_returns
 from functions.Residuals_PCA_function import calculate_future_returns, Ledoit_pca_factor_loadings, pca_factor_loadings, neutralize_z_residual
@@ -42,19 +42,9 @@ Run approve_trades.py to execute via IBKR.
         server.send_message(msg)
     print("Email sent.")
 
-# ─── Download latest data from EODHD ────────────────────────────────────────
+# ─── Setup ───────────────────────────────────────────────────────────────────
 DB_PATH = 'datasets/stock_data.db'
 today = datetime.today().strftime('%Y-%m-%d')
-
-conn = sqlite3.connect(DB_PATH)
-latest_date = pd.read_sql("SELECT MAX(date) as max_date FROM stock_prices", conn).iloc[0]['max_date']
-conn.close()
-
-print(f"Database last updated: {latest_date}")
-print(f"Downloading new data up to: {today}")
-eodhd_download_prices(start_date=latest_date, end_date=today, db_path=DB_PATH, market=".US")
-download_sp500_total_return(end_date=today)
-print("Data download complete.\n")
 
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.max_colwidth', 100)

@@ -102,61 +102,85 @@ def get_eodhd_adjusted_prices(ticker, start_date, end_date, market=".US"):
     return df
 
 
-def eodhd_download_prices(start_date='2000-01-01', end_date=None, db_path="datasets/stock_data.db", market=".US", rate_limit=0.5):
+def eodhd_download_prices(start_date='2000-01-01', end_date=None, db_path="datasets/stock_data.db", market=".US", rate_limit=0.5, batch_size=50):
     if end_date is None:
         end_date = datetime.today().strftime('%Y-%m-%d')
 
-    # Fetch full US symbol list
+    checkpoint_file = db_path + f".checkpoint_{start_date}_{end_date}.json"
+
     if market == ".US":
         url = f"https://eodhd.com/api/exchange-symbol-list/US?api_token={API_KEY}&fmt=json"
-    elif market==".AT":
+    elif market == ".AT":
         url = f"https://eodhd.com/api/exchange-symbol-list/AT?api_token={API_KEY}&fmt=json"
 
     resp = requests.get(url)
 
-    # Debugging output to understand failure
-    print("📡 Status Code:", resp.status_code)
-    print("📄 Content Preview:", resp.text[:300])
+    print("Status Code:", resp.status_code)
 
     if resp.status_code == 200:
         try:
             data = resp.json()
             symbols_df = pd.DataFrame(data)
         except ValueError:
-            print("❌ JSON decode error. Raw response:")
-            print(resp.text[:300])  # limit to 300 chars
+            print("JSON decode error:", resp.text[:300])
             return
     else:
-        print(f"❌ Failed to fetch symbol list: {resp.status_code}")
-        print(resp.text)
+        print(f"Failed to fetch symbol list: {resp.status_code}")
         return
-
 
     if market == ".US":
         nyse_tickers = us_source_tickers(symbols_df)
-    elif market==".AT":
+    elif market == ".AT":
         nyse_tickers = gr_source_tickers(symbols_df)
     print("Number of common stocks:", len(nyse_tickers))
 
-    all_data = []
+    # Load checkpoint — skip tickers already downloaded in this run
+    completed = set()
+    if os.path.exists(checkpoint_file):
+        with open(checkpoint_file) as f:
+            import json as _json
+            completed = set(_json.load(f).get("completed", []))
+        print(f"Resuming from checkpoint: {len(completed)} tickers already done.")
 
-    for i, ticker in enumerate(nyse_tickers, start=1):
-        print(f"[{i}/{len(nyse_tickers)}] Downloading {ticker}")
-        df = get_eodhd_adjusted_prices(ticker, start_date, end_date, market)
-        if not df.empty:
-            all_data.append(df)
-        time.sleep(rate_limit)
-
-    if all_data:
-        result_df = pd.concat(all_data, ignore_index=True)
-
+    def save_batch(batch):
+        if not batch:
+            return
+        result_df = pd.concat(batch, ignore_index=True)
         conn = sqlite3.connect(db_path)
         result_df.to_sql("stock_prices", conn, if_exists="append", index=False)
         conn.close()
 
-        print(f"Appended {len(result_df)} rows to database: {db_path}")
-    else:
-        print("No data downloaded.")
+    def save_checkpoint(completed):
+        import json as _json
+        with open(checkpoint_file, 'w') as f:
+            _json.dump({"completed": list(completed)}, f)
+
+    batch = []
+    for i, ticker in enumerate(nyse_tickers, start=1):
+        if ticker in completed:
+            print(f"[{i}/{len(nyse_tickers)}] Skipping {ticker} (already done)")
+            continue
+
+        print(f"[{i}/{len(nyse_tickers)}] Downloading {ticker}")
+        df = get_eodhd_adjusted_prices(ticker, start_date, end_date, market)
+        if not df.empty:
+            batch.append(df)
+
+        completed.add(ticker)
+        time.sleep(rate_limit)
+
+        if len(batch) >= batch_size:
+            save_batch(batch)
+            save_checkpoint(completed)
+            print(f"  Batch saved. {len(completed)}/{len(nyse_tickers)} tickers done.")
+            batch = []
+
+    save_batch(batch)
+    print(f"Appended final batch to database: {db_path}")
+
+    # Clean up checkpoint on successful completion
+    if os.path.exists(checkpoint_file):
+        os.remove(checkpoint_file)
 
     print("DONE.")
 

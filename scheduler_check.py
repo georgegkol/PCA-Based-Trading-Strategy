@@ -1,8 +1,8 @@
 import os
 import sys
 import subprocess
-import pandas_market_calendars as mcal
 import pandas as pd
+import exchange_calendars as xcals
 from datetime import datetime
 
 LAST_REBALANCE_FILE = 'last_rebalance.txt'
@@ -21,10 +21,9 @@ with open(LAST_REBALANCE_FILE, 'r') as f:
 
 today = pd.Timestamp(datetime.today().date())
 
-# ─── Count NYSE trading days since last rebalance ────────────────────────────
-nyse = mcal.get_calendar('NYSE')
-schedule = nyse.schedule(start_date=last_rebalance, end_date=today)
-trading_days_elapsed = len(schedule) - 1  # exclude the rebalance day itself
+# ─── Count exact NYSE trading days since last rebalance ─────────────────────
+nyse = xcals.get_calendar('XNYS')
+trading_days_elapsed = len(nyse.sessions_in_range(last_rebalance, today)) - 1
 
 print(f"Last rebalance : {last_rebalance.date()}")
 print(f"Today          : {today.date()}")

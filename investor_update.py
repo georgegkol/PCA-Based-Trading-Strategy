@@ -5,7 +5,7 @@ import csv
 import hashlib
 import requests
 import pandas as pd
-import pandas_market_calendars as mcal
+import exchange_calendars as xcals
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -21,7 +21,7 @@ STATE_FILE = os.path.join(PROJECT_DIR, 'portfolio_state.json')
 INVESTORS_FILE = os.path.join(PROJECT_DIR, 'investors.csv')
 SP500_FILE = os.path.join(PROJECT_DIR, 'datasets', 'sp500_total_return.csv')
 LAST_EMAIL_FILE = os.path.join(PROJECT_DIR, 'last_investor_email.txt')
-EMAIL_INTERVAL_DAYS = 3
+EMAIL_INTERVAL_DAYS = 7
 
 
 def load_state():
@@ -79,18 +79,16 @@ def holding_return_since_rebalance(tickers, last_rebalance_str):
 
 
 def next_rebalance_date(last_rebalance_str, trading_days=20):
-    nyse = mcal.get_calendar('NYSE')
+    nyse = xcals.get_calendar('XNYS')
     last = pd.Timestamp(last_rebalance_str)
     today = pd.Timestamp(datetime.today().date())
-    schedule = nyse.schedule(start_date=last, end_date=today)
-    elapsed = len(schedule) - 1
+    elapsed = len(nyse.sessions_in_range(last, today)) - 1
     remaining = max(0, trading_days - elapsed)
     if remaining == 0:
         return "Due now"
-    future = nyse.schedule(start_date=today, end_date=today + pd.Timedelta(days=remaining * 2 + 10))
-    days = future.index.tolist()
-    if remaining <= len(days):
-        return days[remaining - 1].strftime('%B %d, %Y')
+    future = nyse.sessions_in_range(today, today + pd.Timedelta(days=remaining * 2 + 10))
+    if remaining <= len(future):
+        return future[remaining - 1].strftime('%B %d, %Y')
     return "Soon"
 
 
